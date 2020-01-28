@@ -86,13 +86,15 @@ func (c *Codec) Read(b []byte) (typ byte, reqid uint64, n int, err error) {
 
 	// skip 1 byte + skip 8 byte id
 	if i := copy(b, c.buf[9:n]); i != n-9 {
-		log.Printf("%d != %d", i, n-9)
+		if Debug {
+			log.Printf("%d != %d", i, n-9)
+		}
 		return c.buf[0], 0, n, ErrShort
 	}
 
 	if Debug {
-		log.Printf("codec read %d bytes + 8 id bytes +  1 type byte (%d)", n-1, c.buf[0])
-		log.Printf("codec buf %02x", c.buf[0:n])
+		log.Printf("codec %02d read %d bytes + 8 id bytes +  1 type byte (%d)", c.buf[0], c.buf[0])
+		log.Printf("codec %02d buf %02x", c.buf[0], c.buf[0:n])
 	}
 	// return first byte
 	return c.buf[0], c.DecodeUint64(c.buf[1:9]), n - 9, nil // actually n-9, but caller needs to count the connection bytes
@@ -109,8 +111,8 @@ func (c *Codec) Write(v Encodable) (n int, err error) {
 	}
 
 	if Debug {
-		log.Printf("codec wrote %d bytes + 8 id bytes + 1 type byte (%d)", n, c.wbuf[0])
-		log.Printf("codec buf %02x", c.wbuf[0:n])
+		log.Printf("codec %02d wrote %d bytes + 8 id bytes + 1 type byte (%d)", c.wbuf[0], n, c.wbuf[0])
+		log.Printf("codec %02d buf %02x", c.wbuf[0], c.wbuf[0:n])
 	}
 
 	if n > MaxSize {

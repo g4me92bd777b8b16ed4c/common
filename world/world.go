@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"sync"
@@ -12,13 +13,13 @@ import (
 // Beings Sort entities export
 type Beings []Being
 
-var Type byte = 13 // set if changed?
+var Type byte = 31 // set if changed?
 
 func (entities Beings) String() string {
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "beings: %04d", entities.Len())
 	for i := 0; i < entities.Len(); i++ {
-		fmt.Fprintf(&buf, "\n\t[%d] PID: %x (%02.2f, %02.2f)",
+		fmt.Fprintf(&buf, "\n\t[%d] PID: %d (%02.2f, %02.2f)",
 			entities[i].Type(), entities[i].ID(), entities[i].X(), entities[i].Y())
 	}
 
@@ -39,25 +40,51 @@ type World struct {
 	mu       sync.Mutex
 }
 
+type worldOut struct {
+	Entities map[uint64]Being
+}
+
 // New Empty World
 func New() *World {
+	gob.Register(worldOut{})
+	gob.Register(World{})
+
 	return &World{entities: make(map[uint64]Being)}
 }
 
 // Update Being
 func (w *World) Update(b Being) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	w.entities[b.ID()] = b
+}
+
+// Update Being
+func (w *World) Remove(playerid uint64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.entities, playerid)
 }
 
 // Batch update Beings
 func (w *World) Batch(b Beings) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	for i := range b {
 		w.entities[b[i].ID()] = b[i]
 	}
 }
 
+func (w *World) Get(uid uint64) Being {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.entities[uid]
+}
+
 // SnapshotBeings exports an unsorted list of beings
 func (w *World) SnapshotBeings() Beings {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	b := make(Beings, len(w.entities))
 	n := 0
 	for _, v := range w.entities {
@@ -69,6 +96,7 @@ func (w *World) SnapshotBeings() Beings {
 }
 
 func (entities Beings) Len() int {
+
 	return len(entities)
 }
 
@@ -127,17 +155,70 @@ func NewStaticEntity(uid uint64, beingtype byte, atx, aty float64) Being {
 	}
 }
 
-func (entities *Beings) Encode(to []byte) (n int, err error) {
+type P struct {
+	PID uint64
+	PX  float64
+	PY  float64
+	PT  byte
+}
+
+func (p P) ID() uint64 {
+	return p.PID
+}
+func (p P) X() float64 {
+	return p.PX
+}
+func (p P) Y() float64 {
+	return p.PY
+}
+func (p P) Type() byte {
+	return p.PT
+}
+
+type Plist []P
+
+func (p *Plist) Beings() Beings {
+	b := make(Beings, len(*p))
+	for i := range *p {
+		b[i] = (*p)[i]
+	}
+	return b
+}
+
+func (entities Beings) Encodable() []P {
+	x := make([]P, len(entities))
+	for i := range entities {
+		x[i].PID = (entities)[i].ID()
+		x[i].PX = (entities)[i].X()
+		x[i].PY = (entities)[i].Y()
+		x[i].PT = (entities)[i].Type()
+	}
+	//	fmt.Println("ENCODING BEINGS->", x)
+	return x
+}
+func (entities Beings) Encode(to []byte) (n int, err error) {
+
 	buf := new(bytes.Buffer)
-	gob.NewEncoder(buf).Encode(entities)
-	n = copy(to, buf.Bytes())
+	if err = gob.NewEncoder(buf).Encode(entities.Encodable()); err != nil {
+		return 0, err
+	}
+	n = copy(to[0:], buf.Bytes())
 	if n != buf.Len() {
 		return n, fmt.Errorf("beings encode: short write want %d got %d", buf.Len(), n)
 	}
+	//log.Printf("encoding=%02x", to[:n])
 	return n, nil
 }
+
 func (entities *Beings) Decode(from []byte) (err error) {
-	return gob.NewDecoder(bytes.NewReader(from)).Decode(entities)
+	//	log.Printf("decoding=%02x", from)
+	var enc = Plist{}
+	if err := gob.NewDecoder(bytes.NewReader(from)).Decode(&enc); err != nil && err != io.EOF {
+		return err
+	}
+	*entities = (enc).Beings()
+	//log.Printf("decoded: %d entities", len(*entities))
+	return nil
 }
 
 func (entities Beings) Type() byte {

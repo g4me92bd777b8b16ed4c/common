@@ -1,4 +1,4 @@
-package game
+package common
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/g4me92bd777b8b16ed4c/common/chatenc"
+	"github.com/g4me92bd777b8b16ed4c/common/types"
 )
 
 // https://golang.org/ref/spec#Size_and_alignment_guarantees
@@ -26,6 +27,8 @@ import (
 // complex128                           16
 
 const MaxPacketSize = 1024
+
+var Debug = false
 
 func Endian() binary.ByteOrder {
 	return binary.LittleEndian
@@ -82,8 +85,8 @@ func (m MessageType) Byte() byte {
 	return byte(m)
 }
 
-func (l *Login) Type() byte { return byte(MsgPrefixLogin) }
-func (l *Ping) Type() byte  { return byte(MsgPrefixPing) }
+func (l *Login) Type() byte { return byte(types.Login) }
+func (l *Ping) Type() byte  { return byte(types.Ping) }
 func (l *Ping) Encode(b []byte) (n int, err error) {
 	//entrybuf := make([]byte, game.MsgSize(game.MsgPrefixLogin)) // 1 + 8 + enc
 
@@ -113,7 +116,9 @@ func (l *Ping) Decode(b []byte) (err error) {
 	}
 	err = gob.NewDecoder(bytes.NewReader(b)).Decode(l)
 	if err != nil && err != io.EOF {
-		log.Println("Decoding ping:", err)
+		if Debug {
+			log.Println("Decoding ping:", err)
+		}
 		return err
 	}
 	log.Println("PING FROM", l.ID, "delay:", time.Since(l.Time))
@@ -153,11 +158,15 @@ func (m *Message) Encode(b []byte) (n int, err error) {
 }
 
 func (p Message) Type() byte {
-	return byte(MsgPrefixDPad)
+	return byte(types.DPad)
 }
 
 func (p Message) String() string {
-	return fmt.Sprintf("message={%d %d %d}", p.Dpad, p.Key, p.Keymod)
+	s := ""
+	if p.Count > 1 {
+		s = fmt.Sprintf("x%d", p.Count)
+	}
+	return fmt.Sprintf("message={%d %d %d}", p.Dpad, p.Key, p.Keymod, s)
 }
 func (l *Message) Decode(b []byte) (err error) {
 	if len(b) < 10 {
@@ -169,4 +178,66 @@ func (l *Message) Decode(b []byte) (err error) {
 		return err
 	}
 	return nil
+}
+
+type PlayerLogoff struct {
+	UID uint64
+}
+
+func (p *PlayerLogoff) Encode(b []byte) (n int, err error) {
+	buf := new(bytes.Buffer)
+	err = gob.NewEncoder(buf).Encode(p)
+	if err != nil {
+		log.Println("Encoding Ping:", err)
+		return 0, err
+	}
+	n += copy(b[:], buf.Bytes())
+	return n, nil
+}
+func (p *PlayerLogoff) Decode(b []byte) (err error) {
+	if len(b) < 10 {
+		return ErrLength
+	}
+	err = gob.NewDecoder(bytes.NewReader(b)).Decode(p)
+	if err != nil && err != io.EOF {
+		log.Println("Decoding:", err)
+		return err
+	}
+	return nil
+}
+func (p *PlayerLogoff) Type() byte {
+	return byte(types.PlayerLogoff)
+}
+
+type PlayerMessage struct {
+	From    uint64
+	To      uint64
+	Message string
+}
+
+func (p *PlayerMessage) Encode(b []byte) (n int, err error) {
+	buf := new(bytes.Buffer)
+	err = gob.NewEncoder(buf).Encode(p)
+	if err != nil {
+		log.Println("Encoding PlayerMessage:", err)
+		return 0, err
+	}
+	n += copy(b[:], buf.Bytes())
+	return n, nil
+}
+
+func (p *PlayerMessage) Decode(b []byte) (err error) {
+	if len(b) < 10 {
+		return ErrLength
+	}
+	err = gob.NewDecoder(bytes.NewReader(b)).Decode(p)
+	if err != nil && err != io.EOF {
+		log.Println("Decoding PlayerMessage:", err)
+		return err
+	}
+	return nil
+}
+
+func (p *PlayerMessage) Type() byte {
+	return byte(types.PlayerMessage)
 }
