@@ -2,8 +2,9 @@ package chatenc
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"io"
+
+	"sync"
 
 	"gitlab.com/aerth/x/hash/argon2id"
 	"golang.org/x/crypto/nacl/secretbox"
@@ -11,42 +12,30 @@ import (
 
 type Crypt struct {
 	pkey [32]byte
+	mu   sync.Mutex
 }
 
 func Load(s string) *Crypt {
-	var secretKeyBytes []byte
-	var err error
-	if len(s) != 64 {
-		secretKeyBytes = argon2id.New(1, 1, 1).Sum([]byte(s))
-	} else {
-		secretKeyBytes, err = hex.DecodeString(s)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	var secretKey [32]byte
-	copy(secretKey[:], secretKeyBytes)
-
-	c := &Crypt{
-		pkey: secretKey,
-	}
+	c := &Crypt{}
+	go c.Reload(s)
 	return c
 }
 
 func (c *Crypt) Reload(s string) {
-	var secretKeyBytes []byte
-	secretKeyBytes = argon2id.New(1, 1, 1).Sum([]byte(s))
-	copy(c.pkey[:], secretKeyBytes)
-
+	c.mu.Lock()
+	copy(c.pkey[:], argon2id.New(1, 1024, 1).Sum([]byte(s)))
+	c.mu.Unlock()
 }
 
-// Hash to see which channel you are on
 func (c *Crypt) Hash() []byte {
-	return argon2id.New(1, 1, 1).Sum(c.pkey[:])
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return argon2id.NewDefault().Sum(c.pkey[:])
 }
 
 func (c *Crypt) Encrypt(b []byte) []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	var nonce [24]byte
 	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
 		panic(err)
@@ -58,6 +47,8 @@ func (c *Crypt) Decrypt(b []byte) []byte {
 	if len(b) < 25 {
 		return nil
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	var decryptNonce [24]byte
 	copy(decryptNonce[:], b[:24])
 	decrypted, ok := secretbox.Open(nil, b[24:], &decryptNonce, &c.pkey)
