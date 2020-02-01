@@ -1,59 +1,78 @@
+// codec package for encoding/decoding messages over the wire
+// this exists so that we use networking through easy-to-use interfaces,
+// and that when this file changes
 package codec
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"errors"
 	"io"
 	"log"
 	"math"
 	"math/rand"
 	"net"
-	"time"
+	"os"
+	"sync"
+
+	"github.com/g4me92bd777b8b16ed4c/common/types"
 )
 
-var MaxSize = 1024
+var LogTypeStringer func(b byte) string
+
+// Debug ...
+var Debug = os.Getenv("DEBUG") != ""
+
+// DefaultMaxSize is what new codecs have
+const DefaultMaxSize = 1024
 
 // Codec to encode/decode network packets uniformly across clients and servers
+// One codec per connection
+// One codec should be writing to a single connection at a time
+// One codec should be reading from a single connection at a time
+// This should be easy enough to work with
 type Codec struct {
 	Version byte
+	MaxSize int
 	endian  binary.ByteOrder
-
-	reader io.Reader // for Decode
-	writer io.Writer // for Encode
-	closer io.Closer // for Close :)
-
-	buf  []byte
-	wbuf []byte
+	reader  io.Reader // for Decode
+	writer  io.Writer // for Encode
+	closer  io.Closer // for Close :)
+	buf     []byte
+	wbuf    []byte
+	readmu  sync.Mutex
+	writemu sync.Mutex
+	encbuf  bytes.Buffer
 }
 
-// NewCodec starts everything.. conn can be nil
-func NewCodec(endian binary.ByteOrder, conn net.Conn) *Codec {
-	rand.Seed(time.Now().UTC().UnixNano())
+// NewCodec starts everything..
+// If server, conn can be nil, in which case we use New() for each conn
+func NewCodec(endian binary.ByteOrder, conn io.ReadWriteCloser) *Codec {
 	return &Codec{
 		Version: 1,
+		MaxSize: DefaultMaxSize,
 		endian:  endian,
-
-		// reader:  bufio.NewReader(conn),
-		// writer:  bufio.NewWriter(conn),
-		reader: conn,
-		writer: conn,
-		closer: conn,
+		reader:  conn,
+		writer:  conn,
+		closer:  conn,
 	}
 }
 
-// New copies a codec with a new connection
+// New copies a codec but with a new connection. Server uses this for each new connection.
 func (c *Codec) New(conn net.Conn) *Codec {
-	rand.Seed(time.Now().UTC().UnixNano())
 	return &Codec{
 		Version: 1,
 		endian:  c.endian,
-
-		reader: conn,
-		writer: conn,
-		closer: conn,
+		MaxSize: c.MaxSize,
+		reader:  conn,
+		writer:  conn,
+		closer:  conn,
 	}
 }
 
+// Close closes the network connection.
+// If there is no conn, ErrConn will be returned.
 func (c *Codec) Close() error {
 	return c.closer.Close()
 }
@@ -61,65 +80,131 @@ func (c *Codec) Close() error {
 // Encodable is an easy to implement interface that can be sent over the wire
 type Encodable interface {
 	Encode(b []byte) (int, error) // should return an error if buffer is too small
-	Decode(b []byte) error        // should return first error encountered along the way
-	Type() byte                   // returns 0-255, sent as prefix
+	//Decode(b []byte) error        // should return first error encountered along the way
+	Type() types.Type // returns 0-255, sent as prefix
+	EncodeTo(w io.Writer) (int, error)
 }
 
-var ErrSizeMismatch = errors.New("type size bad")
+// ErrShort short or small
 var ErrShort = errors.New("short error")
-var ErrSizeBig = errors.New("big error")
-var Debug = false
 
-func (c *Codec) Read(b []byte) (typ byte, reqid uint64, n int, err error) {
-	if c.buf == nil {
-		c.buf = make([]byte, MaxSize)
+// ErrSizebig too big
+var ErrSizeBig = errors.New("big error")
+
+// ErrConn no connection
+var ErrConn = errors.New("nil conn")
+
+// Decode an object using gob
+func Decode(buf []byte, vptr interface{}) (err error) {
+	err = gob.NewDecoder(bytes.NewReader(buf)).Decode(vptr)
+	if err != nil && err != io.EOF {
+		return err
 	}
+	return nil
+}
+
+// Encode an object using gob
+func Encode(buf *bytes.Buffer, b []byte, vptr interface{}) (n int, err error) {
+	buf.Reset()
+	err = gob.NewEncoder(buf).Encode(vptr)
+	n = copy(b, buf.Bytes())
+	return
+}
+
+// Decode vptr from b
+func (c *Codec) Decode(b []byte, vptr interface{}) (err error) {
+	return Decode(b, vptr)
+}
+
+var ErrZeroType = errors.New("zero type")
+
+// Read skips 2 byte and returns as typ, with request id req, and how many bytes to read (n) or an error.
+func (c *Codec) Read(b []byte) (typ types.Type, reqid uint64, n int, err error) {
+	c.readmu.Lock()
+	defer c.readmu.Unlock()
+	if c.buf == nil {
+		c.buf = make([]byte, 1024)
+	}
+	fillBytes(c.buf)
+	c.buf[0] = 0
+	c.buf[1] = 0
 	n, err = c.reader.Read(c.buf[:])
-	if err != nil && n == 0 {
-		log.Println("err != nil:", err)
+	if err != nil {
 		return 0, 0, n, err
 	}
 
-	if n == MaxSize {
-		return 0, 0, n, ErrSizeBig
+	if n < 10 {
+		return 0, 0, n, ErrShort
 	}
-
 	// skip 1 byte + skip 8 byte id
-	if i := copy(b, c.buf[9:n]); i != n-9 {
-		if Debug {
-			log.Printf("%d != %d", i, n-9)
-		}
-		return c.buf[0], 0, n, ErrShort
+	typ = types.Type(c.endian.Uint16(c.buf[:2]))
+	if typ == 0 {
+		return 0, 0, n, ErrZeroType
 	}
 
+	if i := copy(b, c.buf[10:n]); i != n-10 {
+		if Debug {
+			log.Printf("%d != %d", i, n-10)
+		}
+		return typ, 0, n, ErrShort
+	}
+
+	reqid = c.DecodeUint64(c.buf[2:10])
+
+	if n == c.MaxSize {
+		//log.Println("Codec:", n, "max size")
+		return typ, reqid, n, ErrSizeBig
+	}
 	if Debug {
-		log.Printf("codec %02d read %d bytes + 8 id bytes +  1 type byte (%d)", c.buf[0], c.buf[0])
-		log.Printf("codec %02d buf %02x", c.buf[0], c.buf[0:n])
+		ts := typ.String()
+
+		log.Printf("codec READ %s (%02d %02d) read %d bytes + 8 id bytes +  2 type byte (%d)(%d)", ts, c.buf[0], c.buf[1], n, c.buf[0], c.buf[1])
+		log.Printf("codec READ %v %02d buf %02x", ts, c.buf[0:2], c.buf[2:n])
 	}
 	// return first byte
-	return c.buf[0], c.DecodeUint64(c.buf[1:9]), n - 9, nil // actually n-9, but caller needs to count the connection bytes
+	return typ, reqid, n - 10, nil
 }
-func (c *Codec) Write(v Encodable) (n int, err error) {
+
+type Typer interface {
+	Type() types.Type
+}
+
+func fillBytes(b []byte) {
+	for i := range b {
+		b[i] = 0x00
+	}
+}
+func (c *Codec) Write(v Typer) (n int, err error) {
+	if v.Type() == 0 {
+		panic("Cant encode type Zero")
+	}
+	c.writemu.Lock()
+	defer c.writemu.Unlock()
 	if c.wbuf == nil {
-		c.wbuf = make([]byte, MaxSize)
+		c.wbuf = make([]byte, c.MaxSize)
 	}
-	c.wbuf[0] = v.Type()
-	copy(c.wbuf[1:], c.EncodeUint64(rand.Uint64()))
-	n, err = v.Encode(c.wbuf[9:])
+	c.endian.PutUint16(c.wbuf[0:2], v.Type().Uint16())
+	copy(c.wbuf[2:], c.EncodeUint64(rand.Uint64()))
+
+	if encoder, ok := v.(Encodable); ok {
+		n, err = encoder.Encode(c.wbuf[10:])
+	} else {
+		n, err = Encode(&c.encbuf, c.wbuf[10:], v)
+	}
 	if err != nil {
-		return 0, err
+		return n, err
 	}
-
-	if Debug {
-		log.Printf("codec %02d wrote %d bytes + 8 id bytes + 1 type byte (%d)", c.wbuf[0], n, c.wbuf[0])
-		log.Printf("codec %02d buf %02x", c.wbuf[0], c.wbuf[0:n])
-	}
-
-	if n > MaxSize {
+	if n+10 > c.MaxSize {
+		log.Printf("Codec encode: maxsize=%d, size=%d (too big)", c.MaxSize, n)
 		return n, ErrSizeBig
 	}
+	if Debug {
+		log.Printf("codec WRITE %s (%02d %02d) encoded %d bytes + 8 id bytes +  2 type byte (%d)(%d)", v.Type().String(), c.wbuf[0], c.wbuf[1], n, c.wbuf[0], c.wbuf[1])
+		log.Printf("codec WRITE %v %02d buf %02x", v.Type().String(), c.wbuf[0:2], c.wbuf[2:n])
+	}
+
 	// write type
-	n, err = c.writer.Write(c.wbuf[:n+9])
+	n, err = c.writer.Write(c.wbuf[:n+10])
 	if err != nil {
 		return n, err
 	}

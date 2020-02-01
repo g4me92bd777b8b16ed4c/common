@@ -15,14 +15,6 @@ var endian = Endian()
 // }
 
 const (
-	x uint16 = 1 << 15
-)
-
-const (
-	MaxChatSize = 8
-)
-
-const (
 	UP            byte = 1 << 0
 	DOWN          byte = 1 << 1
 	LEFT          byte = 1 << 2
@@ -40,52 +32,14 @@ const (
 	LEFTUPRIGHT   byte = LEFT | UP | RIGHT
 )
 
-type MessageType byte
-
-// Network Messages
-const (
-// MessageSize                = 1
-// _              MessageType = 2
-// MsgPrefixLogin MessageType = iota
-// MsgPrefixDPad
-// MsgPrefixRepeat
-// MsgPrefixUpdateGps
-// MsgPrefixUpdatePlayers
-// MsgPrefixPlayerMessage
-// MsgPrefixErrorMessage
-// MsgPrefixBufferSize
-// MsgPrefixPlayerLogoff
-// MsgPrefixPing
-// MsgPrefixPong
-// MsgPrefixWorld
-)
-
-//var Sizemap = msgSize
-
-// var msgSize = [256]int{
-// 	// MsgPrefixLogin:         255,
-// 	// MsgPrefixDPad:          1,
-// 	// MsgPrefixRepeat:        24,
-// 	// MsgPrefixUpdateGps:     16,
-// 	// MsgPrefixUpdatePlayers: 24,
-// 	// MsgPrefixPlayerMessage: 1024,
-// 	// MsgPrefixErrorMessage:  1024,
-// 	// MsgPrefixBufferSize:    8,
-// 	// MsgPrefixPing:          255,
-// 	// MsgPrefixPong:          255,
-// }
-
-// func MsgSize(b byte) int {
-// 	return msgSize[b]
-// }
-
 func MSG(b byte) string {
 	return types.Type(b).String()
 }
 
-func GPS(gps [2]int64) string {
-	return fmt.Sprintf("(%d,%d)", gps[0], gps[1])
-}
+// func GPS(gps [2]int64) string {
+// 	return fmt.Sprintf("(%d,%d)", gps[0], gps[1])
+// }
+
 func DPAD(b byte) string {
 	switch b {
 	case UP:
@@ -142,39 +96,6 @@ type Message struct {
 	UnusedPad byte
 	Key       int16
 	Keymod    int16
-	Other     uint16
+	Action    uint16
 	Count     uint16
 }
-
-// func MessageEncode(m Message) []byte {
-// 	var out uint64
-// 	var buf = make([]byte, 8)
-
-// 	out |= uint64(m.Dpad)
-// 	fmt.Printf("[dpad] %020d: %s\n", out, Sprint64(out))
-// 	out |= uint64(m.Key) << 16
-// 	fmt.Printf("[ key] %020d: %s\n", out, Sprint64(out))
-// 	out |= uint64(m.Keymod) << 32
-// 	fmt.Printf("[ mod] %020d: %s\n", out, Sprint64(out))
-// 	out |= uint64(m.Other) << 48
-
-// 	endian.PutUint64(buf, out)
-// 	return buf
-// }
-
-// func MessageDecode(b []byte) Message {
-// 	out := endian.Uint64(b)
-// 	return Message{
-// 		Dpad:      byte(out & math.MaxUint8),
-// 		UnusedPad: byte(out >> 8 & math.MaxUint8),
-// 		Key:       int16(out >> 16 & math.MaxInt16),
-// 		Keymod:    int16(out >> 32 & math.MaxInt16),
-// 		Other:     uint16(out >> 48 & math.MaxUint16),
-// 	}
-// }
-
-// const (
-// 	ENT_NONE byte = iota
-// 	ENT_HUMAN
-// 	ENT_LAST // only for ENT_LAST-1
-// )

@@ -12,53 +12,101 @@ func _() {
 	_ = x[Warn-2]
 	_ = x[Info-3]
 	_ = x[Update-4]
-	_ = x[Asset-5]
-	_ = x[Menu-6]
-	_ = x[Player-7]
+	_ = x[File-5]
+	_ = x[Asset-6]
+	_ = x[Menu-7]
+	_ = x[Player-8]
 	_ = x[Login-20]
 	_ = x[DPad-21]
 	_ = x[Repeat-22]
 	_ = x[UpdateGps-23]
 	_ = x[UpdatePlayers-24]
-	_ = x[PlayerMessage-25]
-	_ = x[ErrorMessage-26]
-	_ = x[BufferSize-27]
-	_ = x[PlayerLogoff-28]
-	_ = x[Ping-29]
-	_ = x[Pong-30]
-	_ = x[World-31]
-	_ = x[Human-1024]
+	_ = x[PlayerAction-25]
+	_ = x[PlayerMessage-26]
+	_ = x[ErrorMessage-27]
+	_ = x[BufferSize-28]
+	_ = x[PlayerLogoff-29]
+	_ = x[Ping-30]
+	_ = x[Pong-31]
+	_ = x[World-32]
+	_ = x[RemoveEntity-33]
+	_ = x[PlayerDeath-34]
+	_ = x[NoTile-256]
+	_ = x[TileGrass-257]
+	_ = x[TileWater-258]
+	_ = x[TileRock-259]
+	_ = x[Villager-1024]
 	_ = x[Robot-1025]
 	_ = x[Alien-1026]
 	_ = x[Zombie-1027]
-	_ = x[Skeleton-1028]
-	_ = x[NPC1-1029]
-	_ = x[NPC2-1030]
+	_ = x[GhostBomb-1028]
+	_ = x[Skeleton-1029]
+	_ = x[NPC1-1030]
+	_ = x[NPC2-1031]
+	_ = x[ActionSlash-2048]
+	_ = x[ActionThrow-2049]
+	_ = x[ActionUse-2050]
+	_ = x[ActionSpell-2051]
+	_ = x[ActionManastorm-2052]
+	_ = x[ActionMagicbullet-2053]
+	_ = x[StatusHaste-4096]
+	_ = x[StatusBloodlust-4097]
+	_ = x[BarHealth-8192]
+	_ = x[BarMana-8193]
+	_ = x[BarEXP-8194]
+	_ = x[SomethingElse-16384]
+	_ = x[SomethingUndefined-32768]
 }
 
 const (
-	_Type_name_0 = "ErrorWarnInfoUpdateAssetMenuPlayer"
-	_Type_name_1 = "LoginDPadRepeatUpdateGpsUpdatePlayersPlayerMessageErrorMessageBufferSizePlayerLogoffPingPongWorld"
-	_Type_name_2 = "HumanRobotAlienZombieSkeletonNPC1NPC2"
+	_Type_name_0 = "ErrorWarnInfoUpdateFileAssetMenuPlayer"
+	_Type_name_1 = "LoginDPadRepeatUpdateGpsUpdatePlayersPlayerActionPlayerMessageErrorMessageBufferSizePlayerLogoffPingPongWorldRemoveEntityPlayerDeath"
+	_Type_name_2 = "NoTileTileGrassTileWaterTileRock"
+	_Type_name_3 = "VillagerRobotAlienZombieGhostBombSkeletonNPC1NPC2"
+	_Type_name_4 = "ActionSlashActionThrowActionUseActionSpellActionManastormActionMagicbullet"
+	_Type_name_5 = "StatusHasteStatusBloodlust"
+	_Type_name_6 = "BarHealthBarManaBarEXP"
+	_Type_name_7 = "SomethingElse"
+	_Type_name_8 = "SomethingUndefined"
 )
 
 var (
-	_Type_index_0 = [...]uint8{0, 5, 9, 13, 19, 24, 28, 34}
-	_Type_index_1 = [...]uint8{0, 5, 9, 15, 24, 37, 50, 62, 72, 84, 88, 92, 97}
-	_Type_index_2 = [...]uint8{0, 5, 10, 15, 21, 29, 33, 37}
+	_Type_index_0 = [...]uint8{0, 5, 9, 13, 19, 23, 28, 32, 38}
+	_Type_index_1 = [...]uint8{0, 5, 9, 15, 24, 37, 49, 62, 74, 84, 96, 100, 104, 109, 121, 132}
+	_Type_index_2 = [...]uint8{0, 6, 15, 24, 32}
+	_Type_index_3 = [...]uint8{0, 8, 13, 18, 24, 33, 41, 45, 49}
+	_Type_index_4 = [...]uint8{0, 11, 22, 31, 42, 57, 74}
+	_Type_index_5 = [...]uint8{0, 11, 26}
+	_Type_index_6 = [...]uint8{0, 9, 16, 22}
 )
 
 func (i Type) String() string {
 	switch {
-	case 1 <= i && i <= 7:
+	case 1 <= i && i <= 8:
 		i -= 1
 		return _Type_name_0[_Type_index_0[i]:_Type_index_0[i+1]]
-	case 20 <= i && i <= 31:
+	case 20 <= i && i <= 34:
 		i -= 20
 		return _Type_name_1[_Type_index_1[i]:_Type_index_1[i+1]]
-	case 1024 <= i && i <= 1030:
-		i -= 1024
+	case 256 <= i && i <= 259:
+		i -= 256
 		return _Type_name_2[_Type_index_2[i]:_Type_index_2[i+1]]
+	case 1024 <= i && i <= 1031:
+		i -= 1024
+		return _Type_name_3[_Type_index_3[i]:_Type_index_3[i+1]]
+	case 2048 <= i && i <= 2053:
+		i -= 2048
+		return _Type_name_4[_Type_index_4[i]:_Type_index_4[i+1]]
+	case 4096 <= i && i <= 4097:
+		i -= 4096
+		return _Type_name_5[_Type_index_5[i]:_Type_index_5[i+1]]
+	case 8192 <= i && i <= 8194:
+		i -= 8192
+		return _Type_name_6[_Type_index_6[i]:_Type_index_6[i+1]]
+	case i == 16384:
+		return _Type_name_7
+	case i == 32768:
+		return _Type_name_8
 	default:
 		return "UnknownType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}

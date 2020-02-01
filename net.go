@@ -5,8 +5,8 @@ import "net"
 type ConnectOptions struct {
 }
 
-func Connect(userid uint64, s string, options *ConnectOptions) (*net.TCPConn, error) {
-	conn, err := net.Dial("tcp", s)
+func Connect(userid uint64, server string, options *ConnectOptions) (*net.TCPConn, error) {
+	conn, err := net.Dial("tcp", server)
 	if err != nil {
 		return nil, err
 	}
